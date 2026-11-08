@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pop — personagem da live</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg1:#ffe9a8;--bg2:#ffb88a;--ink:#3b1d12;--panel:#fff8ec;--line:#e9c9a0;--accent:#e2493b;--chip:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg1:#2b1a4a;--bg2:#5a2a5e;--ink:#fbeedd;--panel:#2a1b3a;--line:#5b4272;--chip:#3a2750}}
+:root[data-theme="dark"]{--bg1:#2b1a4a;--bg2:#5a2a5e;--ink:#fbeedd;--panel:#2a1b3a;--line:#5b4272;--chip:#3a2750}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Baloo 2","Trebuchet MS",system-ui,sans-serif;color:var(--ink);background:linear-gradient(var(--bg1),var(--bg2));display:flex;flex-direction:column;overflow:hidden}
+#stage{position:relative;flex:1;min-height:0}
+canvas{display:block;width:100%;height:100%}
+#bubble{position:absolute;left:50%;top:6%;transform:translateX(-50%);max-width:88%;background:var(--panel);color:var(--ink);border:2px solid var(--line);border-radius:22px;padding:10px 16px;font-size:1.15rem;font-weight:700;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
+#bubble.on{opacity:1}
+.fx{position:absolute;bottom:25%;font-size:2rem;pointer-events:none;animation:rise 2s ease-out forwards}
+@keyframes rise{to{transform:translateY(-260px) scale(1.4);opacity:0}}
+#panel{position:fixed;left:0;right:0;bottom:0;z-index:4;background:color-mix(in srgb,var(--panel) 85%,transparent);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;transition:transform .2s}
+#panel.off{transform:translateY(110%)}
+#tog{position:fixed;left:0;bottom:0;width:64px;height:64px;z-index:6;background:transparent;border:0;opacity:0;padding:0}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+input,select,button{font:inherit;color:var(--ink);background:transparent;border:0;border-radius:0;padding:6px 6px;opacity:.75}
+input,select{border-bottom:1px solid var(--line)}
+input{min-width:0}
+#user{width:28%}#msg{flex:1}
+button{cursor:pointer}
+button.go{font-weight:500}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.small{font-size:.85rem;opacity:.85;align-items:center}
+#start{position:absolute;inset:0;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:5;color:#fff;text-align:center;padding:0 24px}
+#start button{font-size:1.4rem;padding:14px 28px;background:var(--accent);color:#fff;border-radius:14px;opacity:1;font-weight:700}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="bubble"></div>
+  <div id="start"><button id="startBtn">Tocar para começar</button>
+  <p>Depois de começar, os controles ficam escondidos. Toque no canto inferior esquerdo da tela pra mostrar de novo.</p></div>
+</div>
+<div id="panel">
+  <div class="row">
+    <input id="user" value="visitante" aria-label="Nome do espectador">
+    <input id="msg" placeholder="Escreva um comentário de teste" aria-label="Comentário de teste">
+    <button class="go" id="send">Enviar</button>
+  </div>
+  <div class="row" id="gifts"></div>
+  <div class="row small">
+    <select id="voice" aria-label="Voz"></select>
+    <label>Tom <input type="range" id="pitch" min="0.8" max="2" step="0.05" value="1.5"></label>
+  </div>
+</div>
+<button id="tog" aria-label="Mostrar ou esconder controles"></button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var stage=$('stage'),cv=$('c');
+var renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});
+var scene=new THREE.Scene();
+var cam=new THREE.PerspectiveCamera(40,1,0.1,50);cam.position.set(0,0.4,7);
+scene.add(new THREE.HemisphereLight(0xffffff,0xffc9a0,0.9));
+var dl=new THREE.DirectionalLight(0xffffff,0.9);dl.position.set(3,5,6);scene.add(dl);
+
+function mat(c){return new THREE.MeshStandardMaterial({color:c,roughness:0.55})}
+function ell(r,sx,sy,sz,c,x,y,z,parent){var m=new THREE.Mesh(new THREE.SphereGeometry(r,32,24),mat(c));m.scale.set(sx,sy,sz);m.position.set(x,y,z);(parent||g).add(m);return m}
+
+var g=new THREE.Group();scene.add(g);
+ell(1,1.15,1,1,0xffc93c,0,0,0);
+var eyeL=ell(0.3,1,1,0.6,0xffffff,-0.4,0.35,0.88),eyeR=ell(0.3,1,1,0.6,0xffffff,0.4,0.35,0.88);
+ell(0.13,1,1,1,0x1b1b2b,-0.4,0.35,1.08);ell(0.13,1,1,1,0x1b1b2b,0.4,0.35,1.08);
+ell(0.16,1,0.7,0.4,0xff8fa3,-0.72,-0.1,0.72);ell(0.16,1,0.7,0.4,0xff8fa3,0.72,-0.1,0.72);
+var mouth=ell(0.3,1.2,0.1,0.3,0x5a1020,0,-0.28,0.92);
+ell(0.28,1.2,0.6,1.3,0xff9a3c,-0.45,-1,0.25);ell(0.28,1.2,0.6,1.3,0xff9a3c,0.45,-1,0.25);
+function arm(side){var p=new THREE.Group();p.position.set(side*1.1,-0.1,0);var m=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.8,12),mat(0xffc93c));m.position.y=-0.4;p.add(m);var h=ell(0.15,1,1,1,0xffc93c,0,-0.8,0,p);g.add(p);return p}
+var armL=arm(-1),armR=arm(1);
+
+var S={t:0,vy:0,y:0,spinLeft:0,spin:0,squash:0,speaking:false,excite:0,blink:0};
+var last=performance.now();
+function resize(){var w=stage.clientWidth,h=stage.clientHeight;renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.setSize(w,h,false);cam.aspect=w/h;cam.position.z=w/h<0.8?9:7;cam.updateProjectionMatrix()}
+window.addEventListener('resize',resize);resize();
+function loop(now){
+  requestAnimationFrame(loop);
+  var dt=Math.min(0.05,(now-last)/1000);last=now;S.t+=dt;
+  S.vy-=16*dt;S.y+=S.vy*dt;
+  if(S.y<0){if(S.vy<-1)S.squash=0.25;S.y=0;S.vy=0}
+  if(S.spinLeft>0){var st=Math.min(S.spinLeft,13*dt);S.spin+=st;S.spinLeft-=st;if(S.spinLeft<=0)S.spin=0}
+  S.squash*=Math.pow(0.02,dt);S.excite=Math.max(0,S.excite-dt*0.6);
+  g.position.y=S.y+Math.sin(S.t*2)*0.04;
+  g.scale.set(1+S.squash*0.6,1-S.squash+Math.sin(S.t*2)*0.02,1+S.squash*0.4);
+  g.rotation.y=Math.sin(S.t*0.8)*0.18+S.spin;
+  var open=S.speaking?(Math.sin(S.t*18)*0.5+0.5)*0.85+0.15:0.1+S.excite*0.4;
+  mouth.scale.y=0.1+open*0.9;
+  armL.rotation.z=0.5+S.excite*Math.sin(S.t*14)*0.9;
+  armR.rotation.z=-0.5-S.excite*Math.sin(S.t*14+1)*0.9;
+  S.blink-=dt;if(S.blink<-3.2){S.blink=0.12}
+  var e=S.blink>0?0.1:1;eyeL.scale.y=eyeR.scale.y=e;
+  renderer.render(scene,cam);
+}
+requestAnimationFrame(loop);
+
+var bubble=$('bubble'),hideT;
+function showBubble(t){bubble.textContent=t;bubble.classList.add('on');clearTimeout(hideT)}
+function hideBubble(){hideT=setTimeout(function(){bubble.classList.remove('on')},900)}
+function burst(list,n){for(var i=0;i<n;i++){(function(i){setTimeout(function(){var s=document.createElement('span');s.className='fx';s.textContent=list[Math.floor(Math.random()*list.length)];s.style.left=(10+Math.random()*80)+'%';stage.appendChild(s);setTimeout(function(){s.remove()},2100)},i*90)})(i)}}
+
+var voices=[],voiceSel=$('voice');
+function loadVoices(){
+  if(!window.speechSynthesis)return;
+  var all=speechSynthesis.getVoices();
+  voices=all.filter(function(v){return /^pt/i.test(v.lang)});
+  if(!voices.length)voices=all;
+  voiceSel.innerHTML='';
+  voices.forEach(function(v,i){var o=document.createElement('option');o.value=i;o.textContent=v.name+' ('+v.lang+')';voiceSel.appendChild(o)});
+}
+loadVoices();if(window.speechSynthesis)speechSynthesis.onvoiceschanged=loadVoices;
+
+function say(text){
+  return new Promise(function(res){
+    showBubble(text);S.speaking=true;
+    var done=false;
+    function fin(){if(done)return;done=true;S.speaking=false;hideBubble();res()}
+    setTimeout(fin,text.length*95+1800);
+    if(!window.speechSynthesis){return}
+    try{
+      var u=new SpeechSynthesisUtterance(text);
+      u.lang='pt-BR';u.pitch=parseFloat($('pitch').value);u.rate=1.05;
+      var v=voices[voiceSel.value];if(v)u.voice=v;
+      u.onend=fin;u.onerror=fin;
+      speechSynthesis.speak(u);
+    }catch(e){}
+  });
+}
+var wait=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+
+var GIFTS={'Rosa':{e:'🌹',jump:5,turns:0,n:6},'Coração':{e:'💖',jump:6,turns:1,n:10},'Leão':{e:'🦁',jump:7,turns:2,n:18},'Universo':{e:'🌌',jump:8,turns:4,n:30}};
+function reply(user,t){
+  var l=t.toLowerCase();
+  if(/\b(oi|olá|ola|eae|e ai|salve)\b/.test(l))return 'Oi, '+user+'! Que bom que você chegou na live!';
+  if(/nome/.test(l))return 'Eu me chamo Pop! E você, '+user+'?';
+  if(/amo|lindo|fofo|gostei/.test(l))return 'Aww, '+user+', fiquei todo vermelhinho!';
+  if(/\?\s*$/.test(l))return 'Boa pergunta, '+user+'! Hmm... acho que sim!';
+  var o=['Haha, '+user+', essa foi boa!','Interessante, '+user+'! Conta mais!','Adorei, '+user+'! Continua mandando mensagem!','Hmm, '+user+', fiquei pensando nisso agora!'];return o[Math.floor(Math.random()*o.length)];
+}
+function react(ev){
+  if(ev.type==='gift'){var G=ev.g;S.vy=G.jump;S.spinLeft=Math.PI*2*G.turns;S.excite=1;burst([G.e,'✨','💖'],G.n)}
+  else{S.vy=3;S.excite=0.5;burst(['💬'],2)}
+}
+var Q=[],busy=false;
+function push(ev){Q.push(ev);if(Q.length>6)Q.shift();run()}
+function run(){
+  if(busy)return;busy=true;
+  (function next(){
+    var ev=Q.shift();
+    if(!ev){busy=false;return}
+    react(ev);
+    Promise.resolve(ev.say).then(say).then(function(){return wait(300)}).then(next);
+  })();
+}
+var sampleFn=null,sampleTried=false;
+function getSample(){
+  if(sampleTried)return Promise.resolve(sampleFn);
+  sampleTried=true;
+  if(!(window.claude&&window.claude.use))return Promise.resolve(null);
+  return window.claude.use('sample').then(function(s){sampleFn=s;return s}).catch(function(){return null});
+}
+var PERSONA='Você é o Pop, um personagem fofo, animado e engraçado que apresenta uma live no TikTok. Responda em português do Brasil, em no máximo 20 palavras, sem emojis, falando direto com o espectador e reagindo ao que ele disse. Responda só com a fala do Pop. ';
+function ai(prompt,fallback){
+  return getSample().then(function(s){
+    if(!s)return fallback;
+    return Promise.race([
+      s(PERSONA+prompt,{modelTier:'quick',cache:false}).then(function(r){var t=((r&&r.text)||'').replace(/^["“]+|["”]+$/g,'').trim();return t||fallback}),
+      new Promise(function(r){setTimeout(function(){r(fallback)},9000)})
+    ]).catch(function(){return fallback});
+  });
+}
+function comment(user,text){
+  push({type:'comment',say:ai('O espectador '+user+' escreveu no chat: “'+text.slice(0,200)+'”',reply(user,text))});
+}
+function gift(user,name,count){
+  var G=GIFTS[name]||GIFTS['Rosa'];count=count||1;
+  var fb='Uau! '+user+' mandou '+(count>1?count+' ':'')+name+'! Muito obrigado!';
+  push({type:'gift',g:G,say:ai('O espectador '+user+' acabou de mandar '+(count>1?count+' ':'')+'presente '+name+' na live. Agradeça de forma empolgada.',fb)});
+}
+window.live={comment:comment,gift:gift};
+
+Object.keys(GIFTS).forEach(function(n){
+  var b=document.createElement('button');b.textContent=GIFTS[n].e+' '+n;
+  b.onclick=function(){gift($('user').value||'alguém',n,1)};
+  $('gifts').appendChild(b);
+});
+function follow(user){push({type:'gift',g:{e:'🥰',jump:5,turns:1,n:12},say:ai('O espectador '+user+' acabou de seguir o perfil. Agradeça de forma carinhosa e peça pra ele ficar na live.','Obrigado por seguir, '+user+'! Fica aqui com a gente!')})}
+function like(user){push({type:'gift',g:{e:'👍',jump:3,turns:0,n:8},say:ai('O espectador '+user+' curtiu a live. Agradeça de forma animada e peça mais curtidas.','Obrigado pelas curtidas, '+user+'! Vocês são demais!')})}
+window.live.follow=follow;window.live.like=like;
+[['➕ Seguiu',follow],['👍 Curtiu',like]].forEach(function(x){
+  var b=document.createElement('button');b.textContent=x[0];
+  b.onclick=function(){x[1]($('user').value||'alguém')};
+  $('gifts').appendChild(b);
+});
+$('tog').onclick=function(){$('panel').classList.toggle('off')};
+function onEvent(e){
+  var u=e.user||'alguém';
+  if(e.type==='comment')push({type:'comment',say:e.say||reply(u,e.text||'')});
+  else if(e.type==='gift'){var G=GIFTS[e.tier]||GIFTS['Rosa'];var c=e.count||1;push({type:'gift',g:G,say:e.say||('Uau! '+u+' mandou '+(c>1?c+' ':'')+e.name+'! Muito obrigado!')})}
+  else if(e.type==='follow')push({type:'gift',g:{e:'🥰',jump:5,turns:1,n:12},say:e.say||('Obrigado por seguir, '+u+'! Fica aqui com a gente!')});
+  else if(e.type==='like')push({type:'gift',g:{e:'👍',jump:3,turns:0,n:8},say:e.say||('Obrigado pelas curtidas, '+u+'! Vocês são demais!')});
+}
+if(window.EventSource){try{var es=new EventSource('events');es.onmessage=function(m){try{onEvent(JSON.parse(m.data))}catch(x){}}}catch(x){}}
+function sendMsg(){var t=$('msg').value.trim();if(!t)return;comment($('user').value||'alguém',t);$('msg').value=''}
+$('send').onclick=sendMsg;
+$('msg').addEventListener('keydown',function(e){if(e.key==='Enter')sendMsg()});
+
+$('startBtn').onclick=function(){
+  $('start').style.display='none';$('panel').classList.add('off');
+  try{if(window.speechSynthesis){speechSynthesis.cancel();loadVoices()}}catch(e){}
+  push({type:'gift',g:GIFTS['Coração'],say:'Oi, pessoal! Eu sou o Pop e estou pronto pra live!'});
+};
+})();
+</script>
+</body>
+</html>
